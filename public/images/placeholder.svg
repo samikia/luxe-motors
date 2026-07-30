@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="Image unavailable">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a1c"/>
+      <stop offset="100%" stop-color="#0a0a0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <g stroke="#8a8f98" stroke-width="2" fill="none" opacity="0.6">
+    <path d="M180 280 L220 230 Q235 215 260 215 L500 215 Q525 215 540 230 L580 280 L620 280 Q635 280 635 295 L635 310 Q635 320 625 320 L590 320 M210 320 L175 320 Q165 320 165 310 L165 295 Q165 280 180 280 Z"/>
+    <circle cx="245" cy="320" r="22"/>
+    <circle cx="555" cy="320" r="22"/>
+  </g>
+  <text x="400" y="390" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" letter-spacing="2" fill="#8a8f98">IMAGE UNAVAILABLE</text>
+</svg>
