@@ -1,4 +1,6 @@
 export * from "./common";
+export * from "./about";
+export * from "./hero";
 export * from "./brand";
 export * from "./category";
 export * from "./car";

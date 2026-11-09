@@ -17,10 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  getBrands,
+  getAboutUs,
   getContactInfo,
+  getExhibitionBrands,
   getFeaturedCars,
   getFeaturedTestimonials,
+  getHero,
   getSiteSettings,
 } from "@/lib/api";
 import type { CarAvailability } from "@/types";
@@ -33,26 +35,33 @@ function formatAvailability(availability: CarAvailability): string {
 }
 
 export default async function Home() {
-  const [featuredCars, brands, testimonials, siteSettings, contact] = await Promise.all([
-    getFeaturedCars(6),
-    getBrands(),
-    getFeaturedTestimonials(3),
-    getSiteSettings(),
-    getContactInfo(),
-  ]);
+  const [featuredCars, brands, testimonials, siteSettings, contact, aboutUs, hero] =
+    await Promise.all([
+      getFeaturedCars(6),
+      getExhibitionBrands(),
+      getFeaturedTestimonials(3),
+      getSiteSettings(),
+      getContactInfo(),
+      getAboutUs(),
+      getHero(),
+    ]);
 
   const heroCar = featuredCars[0];
-  const heroImage = heroCar?.images.find((img) => img.isPrimary) ?? heroCar?.images[0];
+  const heroCarImage =
+    heroCar?.images.find((img) => img.isPrimary) ?? heroCar?.images[0];
+  const heroBackgroundImage = hero.imageUrl
+    ? { url: hero.imageUrl, alt: hero.imageAlt ?? hero.text }
+    : heroCarImage;
 
   return (
     <div className="dark bg-background text-foreground">
       {/* Hero */}
       <section className="relative isolate flex min-h-[92vh] items-center overflow-hidden border-b border-gold/15">
-        {heroImage && (
+        {heroBackgroundImage && (
           <div className="absolute inset-0 -z-10">
             <FallbackImage
-              src="/images/logoC.svg"
-              alt={heroImage.alt}
+              src={heroBackgroundImage.url}
+              alt={heroBackgroundImage.alt}
               fill
               priority
               className="object-cover"
@@ -69,11 +78,17 @@ export default async function Home() {
               A Private, By-Appointment Exhibition
             </p>
             <h1 className="mt-4 text-5xl font-bold tracking-tight uppercase sm:text-6xl lg:text-7xl">
-              The Ultimate
-              <br />
-              Driving Experience.
+              {hero.text || (
+                <>
+                  The Ultimate
+                  <br />
+                  Driving Experience.
+                </>
+              )}
             </h1>
-            <p className="mt-6 max-w-xl text-lg text-muted-foreground">{siteSettings.tagline}</p>
+            <p className="mt-6 max-w-xl text-lg text-muted-foreground">
+              {hero.title || siteSettings.tagline}
+            </p>
 
             <div className="mt-10 flex flex-wrap items-center gap-6">
               <Link
@@ -109,47 +124,66 @@ export default async function Home() {
       </section>
 
       {/* About */}
-      <section id="about" className="mx-auto max-w-7xl px-3 py-24 sm:px-4 lg:px-6">
+      <section
+        id="about"
+        className="mx-auto max-w-7xl px-3 py-24 sm:px-4 lg:px-6"
+      >
         <div className="grid gap-12 lg:grid-cols-2 lg:gap-20">
           <div>
             <div className="flex items-center gap-2 text-gold">
               <WrenchIcon className="size-5" />
-              <h2 className="text-xl font-semibold tracking-wide uppercase">About TKRAN</h2>
+              <h2 className="text-xl font-semibold tracking-wide uppercase">
+                About TKRAN
+              </h2>
             </div>
-            <p className="mt-5 text-muted-foreground">
-              TKRAN is a private, by-appointment exhibition gallery. {siteSettings.tagline}
-            </p>
-            <p className="mt-4 text-muted-foreground">
-              Rather than a sprawling lot, we curate a small, rotating collection — every vehicle
-              inspected and verified for precision, history, and craftsmanship before it ever
-              reaches the floor.
+            <p className="mt-5 whitespace-pre-line text-muted-foreground">
+              {aboutUs.text ||
+                `TKRAN is a private, by-appointment exhibition gallery. ${siteSettings.tagline}`}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-            {[
-              { icon: ShieldCheckIcon, label: "Certified & Inspected" },
-              { icon: GaugeIcon, label: "Performance Verified" },
-              { icon: StarIcon, label: "Concierge Delivery" },
-            ].map(({ icon: Icon, label }) => (
-              <div
-                key={label}
-                className="flex flex-col items-start gap-3 rounded-2xl border border-gold/15 p-5"
-              >
-                <Icon className="size-6 text-gold" />
-                <p className="text-sm font-medium">{label}</p>
+          <div className="flex flex-col gap-6">
+            {aboutUs.images[0] && (
+              <div className="relative aspect-4/3 w-full overflow-hidden rounded-2xl border border-gold/15">
+                <FallbackImage
+                  src={aboutUs.images[0].url}
+                  alt={aboutUs.images[0].alt}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                />
               </div>
-            ))}
+            )}
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              {[
+                { icon: ShieldCheckIcon, label: "Certified & Inspected" },
+                { icon: GaugeIcon, label: "Performance Verified" },
+                { icon: StarIcon, label: "Concierge Delivery" },
+              ].map(({ icon: Icon, label }) => (
+                <div
+                  key={label}
+                  className="flex flex-col items-start gap-3 rounded-2xl border border-gold/15 p-5"
+                >
+                  <Icon className="size-6 text-gold" />
+                  <p className="text-sm font-medium">{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* Collection */}
-      <section id="inventory" className="scroll-mt-24 border-t border-gold/15 bg-muted/10">
+      <section
+        id="inventory"
+        className="scroll-mt-24 border-t border-gold/15 bg-muted/10"
+      >
         <div className="mx-auto max-w-7xl px-3 py-24 sm:px-4 lg:px-6">
           <div className="flex items-center gap-2 text-gold">
             <CarIcon className="size-5" />
-            <h2 className="text-xl font-semibold tracking-wide uppercase">The Collection</h2>
+            <h2 className="text-xl font-semibold tracking-wide uppercase">
+              The Collection
+            </h2>
           </div>
           <p className="mt-3 max-w-xl text-muted-foreground">
             A rotating selection of our current inventory.
@@ -157,7 +191,8 @@ export default async function Home() {
 
           <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {featuredCars.map((car) => {
-              const image = car.images.find((img) => img.isPrimary) ?? car.images[0];
+              const image =
+                car.images.find((img) => img.isPrimary) ?? car.images[0];
               return (
                 <Card key={car.id} className="ring-gold/15">
                   <div className="relative aspect-4/3 w-full overflow-hidden">
@@ -177,7 +212,8 @@ export default async function Home() {
                       {car.year} {car.brand.name} {car.model} {car.trim ?? ""}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      ${car.price.toLocaleString()} · {car.mileage.toLocaleString()} mi
+                      ${car.price.toLocaleString()} ·{" "}
+                      {car.mileage.toLocaleString()} mi
                     </p>
                   </div>
                 </Card>
@@ -220,7 +256,9 @@ export default async function Home() {
                   height={40}
                   className="h-10 w-auto object-contain opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0"
                 />
-                <p className="text-center text-xs text-muted-foreground">{brand.name}</p>
+                <p className="text-center text-xs text-muted-foreground">
+                  {brand.name}
+                </p>
               </div>
             ))}
           </div>
@@ -228,7 +266,10 @@ export default async function Home() {
       </section>
 
       {/* Testimonials */}
-      <section id="testimonials" className="scroll-mt-24 border-t border-gold/15 bg-muted/10">
+      <section
+        id="testimonials"
+        className="scroll-mt-24 border-t border-gold/15 bg-muted/10"
+      >
         <div className="mx-auto max-w-7xl px-3 py-24 sm:px-4 lg:px-6">
           <h2 className="text-xl font-semibold tracking-wide text-gold uppercase">
             What Our Clients Say
@@ -241,10 +282,14 @@ export default async function Home() {
                     <StarIcon key={i} className="size-4 fill-gold text-gold" />
                   ))}
                 </div>
-                <p className="mt-4 text-sm text-muted-foreground italic">&ldquo;{t.quote}&rdquo;</p>
+                <p className="mt-4 text-sm text-muted-foreground italic">
+                  &ldquo;{t.quote}&rdquo;
+                </p>
                 <p className="mt-4 text-sm font-semibold">{t.authorName}</p>
                 {t.authorTitle && (
-                  <p className="text-xs text-muted-foreground">{t.authorTitle}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t.authorTitle}
+                  </p>
                 )}
               </Card>
             ))}
@@ -278,7 +323,8 @@ export default async function Home() {
               {contact.address.line1}
               {contact.address.line2 ? `, ${contact.address.line2}` : ""}
               <br />
-              {contact.address.city}, {contact.address.state} {contact.address.zip}
+              {contact.address.city}, {contact.address.state}{" "}
+              {contact.address.zip}
             </p>
 
             <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
@@ -287,7 +333,9 @@ export default async function Home() {
                   <ClockIcon className="mt-0.5 size-4 shrink-0 text-gold" />
                   <span>
                     {hour.day}
-                    {hour.open ? ` — ${hour.open}${hour.close ? ` – ${hour.close}` : ""}` : ""}
+                    {hour.open
+                      ? ` — ${hour.open}${hour.close ? ` – ${hour.close}` : ""}`
+                      : ""}
                   </span>
                 </li>
               ))}

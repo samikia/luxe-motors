@@ -1,3 +1,5 @@
+export * from "./about";
+export * from "./hero";
 export * from "./cars";
 export * from "./brands";
 export * from "./categories";

@@ -1,29 +1,22 @@
 import type { ContactPayload, ContactResult, ReservationPayload, ReservationResult } from "@/types";
-import { simulateNetworkDelay } from "./shared/delay";
+import { strapiCreate } from "./shared/strapi-client";
 
-/**
- * MOCK: "submits" by resolving after a delay with a fake reference id.
- * The future Strapi version POSTs to `${STRAPI_URL}/api/reservations` with
- * `{ data: payload }` and keeps this exact signature — consumer code (the
- * RHF onSubmit handler) does not change.
- */
 export async function submitReservation(payload: ReservationPayload): Promise<ReservationResult> {
-  await simulateNetworkDelay(600);
+  const json = await strapiCreate<{ documentId: string }>("/api/reservations", payload);
   const carRef = payload.carSlug.slice(0, 6).toUpperCase();
   return {
     success: true,
-    referenceId: `RES-${carRef}-${Date.now().toString(36).toUpperCase()}`,
+    referenceId: `RES-${carRef}-${json.data!.documentId.slice(0, 8).toUpperCase()}`,
     submittedAt: new Date().toISOString(),
   };
 }
 
-/** MOCK: same pattern as `submitReservation`, targeting `${STRAPI_URL}/api/contact-submissions` later. */
 export async function submitContactForm(payload: ContactPayload): Promise<ContactResult> {
-  await simulateNetworkDelay(600);
+  const json = await strapiCreate<{ documentId: string }>("/api/contact-submissions", payload);
   const subjectRef = payload.subject.replace(/\s+/g, "").slice(0, 6).toUpperCase();
   return {
     success: true,
-    referenceId: `MSG-${subjectRef}-${Date.now().toString(36).toUpperCase()}`,
+    referenceId: `MSG-${subjectRef}-${json.data!.documentId.slice(0, 8).toUpperCase()}`,
     submittedAt: new Date().toISOString(),
   };
 }

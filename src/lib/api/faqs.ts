@@ -1,9 +1,27 @@
-import { faqs as mockFaqs } from "@/data/faqs.mock";
 import type { FAQ, FAQCategory } from "@/types";
-import { simulateNetworkDelay } from "./shared/delay";
+import { strapiFind } from "./shared/strapi-client";
+
+interface StrapiFAQ {
+  documentId: string;
+  question: string;
+  answer: string;
+  category: FAQCategory;
+  order: number;
+}
+
+function flattenStrapiFAQ(entity: StrapiFAQ): FAQ {
+  return {
+    id: entity.documentId,
+    question: entity.question,
+    answer: entity.answer,
+    category: entity.category,
+    order: entity.order,
+  };
+}
 
 export async function getFAQs(category?: FAQCategory): Promise<FAQ[]> {
-  await simulateNetworkDelay();
-  const items = category ? mockFaqs.filter((f) => f.category === category) : mockFaqs;
-  return [...items].sort((a, b) => a.order - b.order);
+  const params = new URLSearchParams({ "sort[0]": "order:asc" });
+  if (category) params.set("filters[category][$eq]", category);
+  const json = await strapiFind<StrapiFAQ>(`/api/faqs?${params}`);
+  return json.data.map(flattenStrapiFAQ);
 }

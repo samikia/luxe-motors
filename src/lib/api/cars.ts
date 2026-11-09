@@ -1,15 +1,132 @@
-import { cars as mockCars } from "@/data/cars.mock";
-import type { Car, InventoryFilters, PaginatedResult } from "@/types";
-import { simulateNetworkDelay } from "./shared/delay";
-import { paginate } from "./shared/paginate";
+import type {
+  Brand,
+  Car,
+  CarSpec,
+  Category,
+  InventoryFilters,
+  InventorySortOption,
+  PaginatedResult,
+} from "@/types";
+import { strapiFind, strapiMediaUrl, mapStrapiMeta } from "./shared/strapi-client";
 import { type StrapiFilterClause, toStrapiSearchParams } from "./shared/strapi-query";
 
-/**
- * Builds the Strapi-equivalent filter clauses from our typed filters. Kept
- * separate from the in-memory filtering below so that, once a real Strapi
- * backend exists, this function is reused as-is to build the query string —
- * only the execution (in-memory vs. `fetch`) changes.
- */
+interface StrapiMediaFile {
+  documentId: string;
+  url: string;
+  alternativeText: string | null;
+}
+
+/** Only the fields populated at this depth when embedded inside a car response. */
+interface StrapiCarBrandRef {
+  documentId: string;
+  BrandName: string;
+  slug: string;
+}
+
+interface StrapiCarCategoryRef {
+  documentId: string;
+  name: string;
+  slug: string;
+}
+
+interface StrapiCarSpec {
+  label: string;
+  value: string;
+  group: CarSpec["group"];
+}
+
+interface StrapiCar {
+  documentId: string;
+  model: string;
+  trim: string | null;
+  slug: string;
+  year: number;
+  price: number;
+  currency: "USD";
+  mileage: number;
+  fuelType: Car["fuelType"];
+  transmission: Car["transmission"];
+  bodyStyle: Car["bodyStyle"];
+  condition: Car["condition"];
+  availability: Car["availability"];
+  exteriorColor: string;
+  interiorColor: string;
+  horsepower: number;
+  topSpeedMph: number;
+  zeroToSixtySec: number;
+  shortDescription: string;
+  description: string;
+  images: StrapiMediaFile[];
+  specs: StrapiCarSpec[];
+  isFeatured: boolean;
+  vin: string | null;
+  brand: StrapiCarBrandRef;
+  category: StrapiCarCategoryRef;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const CAR_POPULATE =
+  "populate[brand]=true&populate[category]=true&populate[images]=true&populate[specs]=true";
+
+function flattenStrapiBrandRef(entity: StrapiCarBrandRef): Brand {
+  return {
+    id: entity.documentId,
+    slug: entity.slug,
+    name: entity.BrandName,
+    logoUrl: "",
+    isFeatured: false,
+    order: 0,
+  };
+}
+
+function flattenStrapiCategoryRef(entity: StrapiCarCategoryRef): Category {
+  return {
+    id: entity.documentId,
+    slug: entity.slug,
+    name: entity.name,
+  };
+}
+
+function flattenStrapiCar(entity: StrapiCar): Car {
+  return {
+    id: entity.documentId,
+    slug: entity.slug,
+    brand: flattenStrapiBrandRef(entity.brand),
+    category: flattenStrapiCategoryRef(entity.category),
+    model: entity.model,
+    trim: entity.trim ?? undefined,
+    year: entity.year,
+    price: entity.price,
+    currency: entity.currency,
+    mileage: entity.mileage,
+    fuelType: entity.fuelType,
+    transmission: entity.transmission,
+    bodyStyle: entity.bodyStyle,
+    condition: entity.condition,
+    availability: entity.availability,
+    exteriorColor: entity.exteriorColor,
+    interiorColor: entity.interiorColor,
+    horsepower: entity.horsepower,
+    topSpeedMph: entity.topSpeedMph,
+    zeroToSixtySec: entity.zeroToSixtySec,
+    shortDescription: entity.shortDescription,
+    description: entity.description,
+    images: entity.images.map((img, i) => ({
+      id: img.documentId,
+      url: strapiMediaUrl(img) ?? "",
+      alt: img.alternativeText ?? `${entity.model} photo ${i + 1}`,
+      isPrimary: i === 0,
+      order: i,
+    })),
+    specs: entity.specs,
+    isFeatured: entity.isFeatured,
+    vin: entity.vin ?? undefined,
+    createdAt: entity.createdAt,
+    updatedAt: entity.updatedAt,
+  };
+}
+
 function buildFilterClauses(filters: InventoryFilters): StrapiFilterClause[] {
   const clauses: StrapiFilterClause[] = [];
 
@@ -33,93 +150,74 @@ function buildFilterClauses(filters: InventoryFilters): StrapiFilterClause[] {
   return clauses;
 }
 
-function applyFiltersInMemory(items: Car[], filters: InventoryFilters): Car[] {
-  let result = items;
-
-  if (filters.brandSlug) result = result.filter((c) => c.brand.slug === filters.brandSlug);
-  if (filters.categorySlug) result = result.filter((c) => c.category.slug === filters.categorySlug);
-  if (filters.yearMin) result = result.filter((c) => c.year >= filters.yearMin!);
-  if (filters.yearMax) result = result.filter((c) => c.year <= filters.yearMax!);
-  if (filters.priceMin) result = result.filter((c) => c.price >= filters.priceMin!);
-  if (filters.priceMax) result = result.filter((c) => c.price <= filters.priceMax!);
-  if (filters.bodyStyle) result = result.filter((c) => c.bodyStyle === filters.bodyStyle);
-  if (filters.condition) result = result.filter((c) => c.condition === filters.condition);
-  if (filters.query) {
-    const q = filters.query.toLowerCase();
-    result = result.filter(
-      (c) =>
-        c.model.toLowerCase().includes(q) ||
-        c.brand.name.toLowerCase().includes(q) ||
-        (c.trim?.toLowerCase().includes(q) ?? false),
-    );
-  }
-  if (filters.fuelType) {
-    const wanted = Array.isArray(filters.fuelType) ? filters.fuelType : [filters.fuelType];
-    result = result.filter((c) => wanted.includes(c.fuelType));
-  }
-
-  return result;
-}
-
-function applySort(items: Car[], sort: InventoryFilters["sort"]): Car[] {
-  const sorted = [...items];
+function sortParam(sort: InventorySortOption | undefined): string {
   switch (sort) {
     case "price-asc":
-      return sorted.sort((a, b) => a.price - b.price);
+      return "price:asc";
     case "price-desc":
-      return sorted.sort((a, b) => b.price - a.price);
+      return "price:desc";
     case "year-desc":
-      return sorted.sort((a, b) => b.year - a.year);
+      return "year:desc";
     case "year-asc":
-      return sorted.sort((a, b) => a.year - b.year);
+      return "year:asc";
     case "mileage-asc":
-      return sorted.sort((a, b) => a.mileage - b.mileage);
+      return "mileage:asc";
     case "newest":
     default:
-      return sorted.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+      return "createdAt:desc";
   }
 }
 
-/**
- * MOCK IMPLEMENTATION. The future Strapi-backed version keeps this exact
- * signature and return shape; internally it will do:
- *
- *   const params = toStrapiSearchParams(buildFilterClauses(filters));
- *   params.set("pagination[page]", String(filters.page ?? 1));
- *   params.set("pagination[pageSize]", String(filters.pageSize ?? 12));
- *   const res = await fetch(`${STRAPI_URL}/api/cars?populate=*&${params}`);
- *   const json = await res.json();
- *   return { data: json.data.map(flattenStrapiCar), meta: mapStrapiMeta(json.meta) };
- */
 export async function getCars(filters: InventoryFilters = {}): Promise<PaginatedResult<Car>> {
-  await simulateNetworkDelay();
+  const params = toStrapiSearchParams(buildFilterClauses(filters));
+  params.set("pagination[page]", String(filters.page ?? 1));
+  params.set("pagination[pageSize]", String(filters.pageSize ?? 12));
+  params.set("sort[0]", sortParam(filters.sort));
 
-  // Computed (and discarded) to prove parity with the future Strapi query shape.
-  toStrapiSearchParams(buildFilterClauses(filters));
-  const filtered = applyFiltersInMemory(mockCars, filters);
-  const sorted = applySort(filtered, filters.sort);
-
-  return paginate(sorted, filters.page ?? 1, filters.pageSize ?? 12);
+  const json = await strapiFind<StrapiCar>(`/api/cars?${CAR_POPULATE}&${params}`);
+  return { data: json.data.map(flattenStrapiCar), meta: mapStrapiMeta(json.meta) };
 }
 
 export async function getCarBySlug(slug: string): Promise<Car | null> {
-  await simulateNetworkDelay(300);
-  return mockCars.find((c) => c.slug === slug) ?? null;
+  const params = new URLSearchParams({ "filters[slug][$eq]": slug, "pagination[pageSize]": "1" });
+  const json = await strapiFind<StrapiCar>(`/api/cars?${CAR_POPULATE}&${params}`);
+  return json.data[0] ? flattenStrapiCar(json.data[0]) : null;
 }
 
 export async function getRelatedCars(car: Car, limit = 3): Promise<Car[]> {
-  await simulateNetworkDelay(300);
-  return mockCars
-    .filter((c) => c.id !== car.id && (c.brand.id === car.brand.id || c.category.id === car.category.id))
-    .slice(0, limit);
+  const params = new URLSearchParams({
+    "filters[slug][$ne]": car.slug,
+    "filters[$or][0][brand][slug][$eq]": car.brand.slug,
+    "filters[$or][1][category][slug][$eq]": car.category.slug,
+    "pagination[pageSize]": String(limit),
+  });
+  const json = await strapiFind<StrapiCar>(`/api/cars?${CAR_POPULATE}&${params}`);
+  return json.data.map(flattenStrapiCar);
 }
 
 export async function getFeaturedCars(limit = 6): Promise<Car[]> {
-  await simulateNetworkDelay();
-  return mockCars.filter((c) => c.isFeatured).slice(0, limit);
+  const params = new URLSearchParams({
+    "filters[isFeatured][$eq]": "true",
+    "pagination[pageSize]": String(limit),
+  });
+  const json = await strapiFind<StrapiCar>(`/api/cars?${CAR_POPULATE}&${params}`);
+  return json.data.map(flattenStrapiCar);
 }
 
 export async function getAllCarSlugs(): Promise<string[]> {
-  await simulateNetworkDelay(100);
-  return mockCars.map((c) => c.slug);
+  const params = new URLSearchParams({ "fields[0]": "slug", "pagination[pageSize]": "100" });
+  const json = await strapiFind<{ slug: string }>(`/api/cars?${params}`);
+  return json.data.map((c) => c.slug);
+}
+
+/** Slugs of every brand that has at least one car currently in the collection. */
+export async function getInventoryBrandSlugs(): Promise<Set<string>> {
+  const params = new URLSearchParams({
+    "fields[0]": "id",
+    "populate[brand][fields][0]": "slug",
+    "pagination[pageSize]": "100",
+  });
+  const json = await strapiFind<{ brand: { slug: string } | null }>(`/api/cars?${params}`);
+  const slugs = json.data.map((c) => c.brand?.slug).filter((s): s is string => Boolean(s));
+  return new Set(slugs);
 }
